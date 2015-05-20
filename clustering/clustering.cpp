@@ -10,7 +10,12 @@
 #include<ctime>
 #include<sstream>
 
+#include<opencv\cv.h>
+#include<opencv\highgui.h>
+#include<opencv2\opencv.hpp>
+
 using namespace std;
+using namespace cv;
 
 #define OUTLIER_THRESHOLD 0.5
 
@@ -22,9 +27,13 @@ vector<FILE*> outputFiles;
 int K;
 int O;
 string output = "input";
+string img_name = "result_";
 
 int knn[10000][10000];
 int map[1000][1000];
+
+int maxw = 0;
+int maxh = 0;
 
 /*
 objects list
@@ -172,8 +181,12 @@ void initClusterCentroid(){
             temp.c_y = temp_obj.y;
 
             flag = 0;
+
+            int threshold;
+            threshold = maxw>maxh ? maxw *0.1 : maxh *0.1;
+         
             for (j = 0; j < i; j++){
-                if (calculateDistance(temp.c_x, temp.c_y, clusterList[j].c_x, clusterList[j].c_y)<20){
+                if (calculateDistance(temp.c_x, temp.c_y, clusterList[j].c_x, clusterList[j].c_y)<threshold){
                     flag = 1;
                     break;
                 }
@@ -258,29 +271,44 @@ void writeResult(){
         }
     }
 }
+static cv::Scalar colorPreset[] = {
+    CV_RGB(0, 255, 0),
+    CV_RGB(255, 0, 0),
+    CV_RGB(0, 0, 255),
+    CV_RGB(255, 255, 0),
+    CV_RGB(255, 0, 255),
+    CV_RGB(0, 255, 255),
+    CV_RGB(100, 100, 100),
+    CV_RGB(50, 150, 0),
+    CV_RGB(255, 255, 255)
+};
+
 
 void drawCluster(){
-    int i, j;
-    FILE* cluster;
-    cluster = fopen("cluster.txt", "w");
+    int w = (double)maxw*10.1, h = (double)maxh*10.1;
+    cv::Mat image(h, w, CV_8UC3,colorPreset[8]);
+    char str[100];
+    char *token;
 
-    for (i = 0; i < 1000; i++){
-        for (j = 0; j < 1000; j++){
-            map[i][j] = 9;
+    int i,j;
+
+    for (i = 0; i < K; i++){
+        for (j = 0; j < clusterList[i].objectList.size(); j++){
+            int idx = clusterList[i].objectList[j].id;
+
+            cv::Point tp;
+
+            tp.x = objectList[idx].x*10+5;
+            tp.y = objectList[idx].y*10+5;
+
+            circle(image, tp, 1, colorPreset[i], 2, 8, 0);
         }
+        imshow("clustering", image);
+        waitKey(1000);
     }
 
-    for (i = 0; i < objectList.size(); i++){
-        int x = objectList[i].x;
-        int y = objectList[i].y;
-        map[x][y] = objectList[i].cid;
-    }
-
-    for (i = 0; i < 1000; i++){
-        for (j = 0; j < 1000; j++){
-            fprintf(cluster,"%d ", map[i][j]);
-        }
-    }
+    imwrite(img_name,image);
+   
 }
 
 int main(int argc, char* argv[]){
@@ -294,6 +322,8 @@ int main(int argc, char* argv[]){
     }
 
     output.append(argv[1], 5, 1);
+    img_name.append(argv[1], 0, 6);
+    img_name.append(".jpg");
 
     in = fopen(argv[1], "r");
     K = atoi(argv[2]);
@@ -313,10 +343,15 @@ int main(int argc, char* argv[]){
             token = strtok(NULL, "\t");
             temp = token;
             tobject.x = stod(temp, &sz);
+            if (tobject.x > maxw)
+                maxw = tobject.x;
 
             token = strtok(NULL, "\n");
             temp = token;
             tobject.y = stod(temp, &sz);
+            if (tobject.y > maxh)
+                maxh = tobject.y;
+
 
             objectList.push_back(tobject);
 
@@ -341,6 +376,8 @@ int main(int argc, char* argv[]){
     
     // write to output
     writeResult();
+
+    drawCluster();
   
     return 0;
 }
